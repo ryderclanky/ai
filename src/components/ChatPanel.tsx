@@ -2,6 +2,55 @@ import { useState, useRef, useEffect } from 'react'
 import { sendMessage, getState } from '../api'
 import type { AppState, ToolEvent } from '../api'
 
+// Extract the visible response from agent output.
+// The LLM sometimes returns raw JSON like {"thought":"...","response":"..."}.
+// Strip that and return just the response text.
+function extractResponse(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('{')) return trimmed
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>
+    if (typeof parsed.response === 'string') return parsed.response
+    if (typeof parsed.thought === 'string' && !parsed.response) return parsed.thought
+  } catch {
+    // partial JSON mid-stream — return as-is
+  }
+  return trimmed
+}
+
+// Render basic markdown: **bold**, bullet lists, line breaks
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split('\n')
+  return lines.map((line, i) => {
+    const isBullet = /^[-*•]\s+/.test(line)
+    const content = isBullet ? line.replace(/^[-*•]\s+/, '') : line
+
+    // Bold: **text**
+    const parts = content.split(/(\*\*[^*]+\*\*)/)
+    const rendered = parts.map((part, j) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={j}>{part.slice(2, -2)}</strong>
+      }
+      return part
+    })
+
+    if (isBullet) {
+      return (
+        <div key={i} style={{ display: 'flex', gap: 7, marginTop: i > 0 ? 4 : 0 }}>
+          <span style={{ color: '#2563eb', flexShrink: 0, marginTop: 1 }}>›</span>
+          <span>{rendered}</span>
+        </div>
+      )
+    }
+
+    return (
+      <div key={i} style={{ marginTop: i > 0 && line ? 6 : i > 0 ? 4 : 0 }}>
+        {rendered}
+      </div>
+    )
+  })
+}
+
 const CheckIcon = () => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
     <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#16a34a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -178,7 +227,9 @@ export default function ChatPanel({ onStateChange }: ChatPanelProps) {
                     fontSize: 13.5, lineHeight: 1.6, color: '#1c1b19',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                   }}>
-                    {msg.text || (msg.streaming ? <span style={{ color: '#a09c94' }}>...</span> : null)}
+                    {msg.streaming && !msg.text
+                      ? <span style={{ color: '#a09c94' }}>...</span>
+                      : renderMarkdown(extractResponse(msg.text))}
                   </div>
                 )}
 

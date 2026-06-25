@@ -4,6 +4,7 @@ import LeftSidebar from './components/LeftSidebar'
 import ChatPanel from './components/ChatPanel'
 import RightPanel from './components/RightPanel'
 import BottomTabs from './components/BottomTabs'
+import LoginScreen from './components/LoginScreen'
 import { getState, connectWebSocket, approveAction, rejectAction } from './api'
 import type { AppState } from './api'
 
@@ -19,22 +20,17 @@ const emptyState: AppState = {
   playbooks: [],
 }
 
-export default function App() {
+function Workspace() {
   const [state, setState] = useState<AppState>(emptyState)
   const [activeTab, setActiveTab] = useState<TabId>('leads')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Initial load
     getState()
       .then(s => { setState(s); setLoading(false) })
       .catch(() => setLoading(false))
 
-    // WebSocket for real-time updates
-    const disconnect = connectWebSocket((newState) => {
-      setState(newState)
-    })
-
+    const disconnect = connectWebSocket((newState) => setState(newState))
     return disconnect
   }, [])
 
@@ -84,4 +80,14 @@ export default function App() {
       />
     </div>
   )
+}
+
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+
+  if (!isLoggedIn) {
+    return <LoginScreen onLogin={() => setIsLoggedIn(true)} />
+  }
+
+  return <Workspace />
 }
