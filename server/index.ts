@@ -6,6 +6,7 @@ import { WebSocketServer } from 'ws';
 import { v4 as uuidv4 } from 'uuid';
 import { seedDatabase } from './db/seed.js';
 import { AgentOrchestrator } from './agents/AgentOrchestrator.js';
+import { CodingAgent } from './agents/CodingAgent.js';
 import { ApprovalService } from './services/ApprovalService.js';
 import { TaskService } from './services/TaskService.js';
 import { MemoryService } from './services/MemoryService.js';
@@ -22,6 +23,7 @@ app.use(cors());
 app.use(express.json());
 
 const orchestrator = new AgentOrchestrator();
+const codingAgent = new CodingAgent();
 const approvalService = new ApprovalService();
 const taskService = new TaskService();
 const memoryService = new MemoryService();
@@ -72,6 +74,47 @@ app.post('/api/chat', async (req, res) => {
     // handleMessage persists both the user message and the assistant
     // response to the messages table — no extra save needed here.
     await orchestrator.handleMessage(message, sendEvent);
+    sendEvent({ type: 'done', data: null });
+  } catch (err) {
+    sendEvent({ type: 'error', data: String(err) });
+  } finally {
+    res.end();
+  }
+});
+
+// ─── Coding Agent (SSE) ──────────────────────────────────────────────────────
+
+app.post('/api/code-chat', async (req, res) => {
+  const { message, history } = req.body as {
+    message?: string;
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  };
+
+  if (!message || typeof message !== 'string') {
+    res.status(400).json({ error: 'message is required' });
+    return;
+  }
+  if (!process.env.DEEPSEEK_API_KEY) {
+    res.status(503).json({ error: 'Set DEEPSEEK_API_KEY in your .env to enable the coding agent.' });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  const sendEvent = (data: { type: string; data: unknown }) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
+  try {
+    await codingAgent.run(message, history ?? [], {
+      onToken: (token) => sendEvent({ type: 'token', data: token }),
+      onTool: (name, params, result) => sendEvent({ type: 'tool', data: { name, params, result } }),
+      onError: (error) => sendEvent({ type: 'error', data: error.message }),
+    });
     sendEvent({ type: 'done', data: null });
   } catch (err) {
     sendEvent({ type: 'error', data: String(err) });

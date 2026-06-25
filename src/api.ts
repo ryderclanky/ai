@@ -156,6 +156,52 @@ export async function sendMessage(
   }
 }
 
+export async function sendCodeMessage(
+  message: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+  onToken: (t: string) => void,
+  onTool: (t: ToolEvent) => void
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/code-chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json() as { error?: string };
+    throw new Error(err.error || 'Coding agent failed');
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('No response body');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const jsonStr = line.slice(6).trim();
+      if (!jsonStr) continue;
+      let event: { type: string; data: unknown } | null = null;
+      try {
+        event = JSON.parse(jsonStr) as { type: string; data: unknown };
+      } catch {
+        continue; // ignore malformed SSE frame
+      }
+      if (event.type === 'token') onToken(event.data as string);
+      else if (event.type === 'tool') onTool(event.data as ToolEvent);
+      else if (event.type === 'error') throw new Error(event.data as string);
+    }
+  }
+}
+
 export async function approveAction(id: string): Promise<Approval> {
   const res = await fetch(`${API_BASE}/api/approvals/${id}/approve`, { method: 'POST' });
   if (!res.ok) throw new Error('Failed to approve');

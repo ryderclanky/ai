@@ -1,8 +1,9 @@
 interface HeaderProps {
   pendingCount: number
+  onOpenCodingAgent: () => void
 }
 
-export default function Header({ pendingCount }: HeaderProps) {
+export default function Header({ pendingCount, onOpenCodingAgent }: HeaderProps) {
   return (
     <header style={{
       height: 48, flexShrink: 0, background: '#fff',
@@ -22,6 +23,31 @@ export default function Header({ pendingCount }: HeaderProps) {
         <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '-0.02em', color: '#1c1b19' }}>
           Employee Agent
         </span>
+        {/* Secret coding agent trigger — the little person icon */}
+        <button
+          onClick={onOpenCodingAgent}
+          title="Open Forge — coding agent"
+          aria-label="Open coding agent"
+          style={{
+            width: 24, height: 24, marginLeft: 2, padding: 0,
+            background: 'transparent', border: '1px solid #e5e2db', borderRadius: 6,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: '#9b9690', transition: 'all 0.15s'
+          }}
+          onMouseEnter={e => {
+            const b = e.currentTarget
+            b.style.color = '#7c3aed'; b.style.borderColor = '#c4b5fd'; b.style.background = '#faf5ff'
+          }}
+          onMouseLeave={e => {
+            const b = e.currentTarget
+            b.style.color = '#9b9690'; b.style.borderColor = '#e5e2db'; b.style.background = 'transparent'
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="4.5" r="2.2" stroke="currentColor" strokeWidth="1.3" fill="none" />
+            <path d="M2.5 12.5c0-2.485 2.015-4.5 4.5-4.5s4.5 2.015 4.5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          </svg>
+        </button>
       </div>
 
       <div style={{ width: 1, height: 18, background: '#e5e2db' }} />

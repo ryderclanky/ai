@@ -5,6 +5,7 @@ import ChatPanel from './components/ChatPanel'
 import RightPanel from './components/RightPanel'
 import BottomTabs from './components/BottomTabs'
 import LoginScreen from './components/LoginScreen'
+import CodingAgentPanel from './components/CodingAgentPanel'
 import { getState, connectWebSocket, approveAction, rejectAction } from './api'
 import type { AppState } from './api'
 
@@ -24,6 +25,7 @@ function Workspace() {
   const [state, setState] = useState<AppState>(emptyState)
   const [activeTab, setActiveTab] = useState<TabId>('projects')
   const [loading, setLoading] = useState(true)
+  const [codingOpen, setCodingOpen] = useState(false)
 
   useEffect(() => {
     getState()
@@ -62,7 +64,7 @@ function Workspace() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <Header pendingCount={pendingApprovals.length} />
+      <Header pendingCount={pendingApprovals.length} onOpenCodingAgent={() => setCodingOpen(true)} />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
         <LeftSidebar tasks={state.tasks} logs={state.logs} memories={state.memories} />
         <ChatPanel onStateChange={(newState) => setState(newState)} />
@@ -78,6 +80,7 @@ function Workspace() {
         onTabChange={setActiveTab}
         state={state}
       />
+      {codingOpen && <CodingAgentPanel onClose={() => setCodingOpen(false)} />}
     </div>
   )
 }
