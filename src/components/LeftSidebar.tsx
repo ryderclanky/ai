@@ -1,8 +1,10 @@
-import type { Task, ActionLog } from '../api'
+import { useState, useEffect } from 'react'
+import type { Task, ActionLog, Memory } from '../api'
 
 interface LeftSidebarProps {
   tasks: Task[]
   logs: ActionLog[]
+  memories: Memory[]
 }
 
 function getTaskStyle(status: string) {
@@ -11,16 +13,6 @@ function getTaskStyle(status: string) {
     case 'in_progress': return { color: '#3b82f6', bg: '#eff6ff', border: '#3b82f6' }
     case 'waiting': return { color: '#d97706', bg: '#fffbeb', border: '#f59e0b' }
     default: return { color: '#c4c0b9', bg: '#f7f6f3', border: '#d8d5cf' }
-  }
-}
-
-function getTaskNote(task: Task) {
-  if (task.note) return task.note
-  switch (task.status) {
-    case 'done': return 'Completed'
-    case 'in_progress': return 'In progress'
-    case 'waiting': return 'Awaiting approval'
-    default: return 'Not started'
   }
 }
 
@@ -53,9 +45,21 @@ function TaskDot({ status }: { status: string }) {
   )
 }
 
-export default function LeftSidebar({ tasks, logs }: LeftSidebarProps) {
+export default function LeftSidebar({ tasks, logs, memories }: LeftSidebarProps) {
+  const [currentTime, setCurrentTime] = useState(new Date())
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000)
+    return () => clearInterval(timer)
+  }, [])
+
   const doneCount = tasks.filter(t => t.status === 'done').length
+  const inProgressCount = tasks.filter(t => t.status === 'in_progress').length
   const pendingCount = tasks.filter(t => t.status !== 'done').length
+
+  const businessGoal = memories.find(m => m.category === 'business_goal')
+
+  const recentTasks = tasks.slice(0, 6)
 
   return (
     <aside style={{
@@ -63,67 +67,83 @@ export default function LeftSidebar({ tasks, logs }: LeftSidebarProps) {
       borderRight: '1px solid #e5e2db', overflowY: 'auto',
       display: 'flex', flexDirection: 'column'
     }}>
+      {/* Date & time */}
+      <div style={{ padding: '14px 14px 10px' }}>
+        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a09c94', marginBottom: 4 }}>
+          {currentTime.toLocaleDateString('en-US', { weekday: 'long' })}
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#1c1b19', letterSpacing: '-0.02em', fontFamily: "'DM Mono', monospace" }}>
+          {currentTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+        </div>
+        <div style={{ fontSize: 11, color: '#a09c94', marginTop: 2 }}>
+          {currentTime.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+        </div>
+      </div>
+      <div style={{ height: 1, background: '#edebe7', margin: '0 14px' }} />
+
       {/* Business Goal */}
-      <div style={{ padding: '14px 14px 12px' }}>
-        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a09c94', marginBottom: 7 }}>
-          Business Goal
-        </div>
-        <div style={{ fontSize: 12.5, fontWeight: 500, color: '#1c1b19', lineHeight: 1.45 }}>
-          Grow catering clients by 20% this quarter
-        </div>
-        <div style={{ marginTop: 9, height: 3, background: '#edebe7', borderRadius: 2, overflow: 'hidden' }}>
-          <div style={{ width: '34%', height: '100%', background: '#2563eb', borderRadius: 2 }} />
-        </div>
-        <div style={{ fontSize: 10.5, color: '#a09c94', marginTop: 4 }}>34% · 6 weeks remaining</div>
-      </div>
-      <div style={{ height: 1, background: '#edebe7', margin: '0 14px' }} />
-
-      {/* Active Project */}
-      <div style={{ padding: '12px 14px' }}>
-        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a09c94', marginBottom: 7 }}>
-          Active Project
-        </div>
-        <div style={{ background: '#f7f6f3', border: '1px solid #e5e2db', borderRadius: 7, padding: '9px 10px' }}>
-          <div style={{ fontSize: 12.5, fontWeight: 500, color: '#1c1b19' }}>Local Restaurant Outreach</div>
-          <div style={{ fontSize: 11, color: '#7a7670', marginTop: 2 }}>{tasks.length} tasks · {pendingCount} pending</div>
-        </div>
-      </div>
-
-      {/* Today's Focus */}
-      <div style={{ padding: '0 14px 12px' }}>
-        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a09c94', marginBottom: 6 }}>
-          Today's Focus
-        </div>
-        <div style={{ fontSize: 12, color: '#1c1b19', lineHeight: 1.5 }}>
-          Review restaurant leads and approve outreach emails before noon.
-        </div>
-      </div>
-      <div style={{ height: 1, background: '#edebe7', margin: '0 14px' }} />
+      {businessGoal ? (
+        <>
+          <div style={{ padding: '12px 14px' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a09c94', marginBottom: 6 }}>
+              Business Goal
+            </div>
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: '#1c1b19', lineHeight: 1.45 }}>
+              {businessGoal.content}
+            </div>
+          </div>
+          <div style={{ height: 1, background: '#edebe7', margin: '0 14px' }} />
+        </>
+      ) : null}
 
       {/* Tasks */}
       <div style={{ padding: '12px 14px', flex: 1 }}>
-        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a09c94', marginBottom: 8 }}>
-          Tasks
-        </div>
-        {tasks.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#a09c94', fontStyle: 'italic' }}>No tasks yet</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {tasks.map(task => {
-              const style = getTaskStyle(task.status)
-              return (
-                <div key={task.id} style={{ display: 'flex', gap: 8, padding: '5px 0', alignItems: 'flex-start' }}>
-                  <TaskDot status={task.status} />
-                  <div>
-                    <div style={{ fontSize: 12, color: task.status === 'todo' ? '#a09c94' : '#1c1b19', lineHeight: 1.35 }}>
-                      {task.title}
-                    </div>
-                    <div style={{ fontSize: 10.5, color: style.color, marginTop: 1 }}>{getTaskNote(task)}</div>
-                  </div>
-                </div>
-              )
-            })}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#a09c94' }}>
+            Tasks
           </div>
+          {tasks.length > 0 && (
+            <div style={{ fontSize: 10, color: '#a09c94' }}>
+              {doneCount}/{tasks.length}
+            </div>
+          )}
+        </div>
+
+        {tasks.length === 0 ? (
+          <div style={{ fontSize: 11.5, color: '#a09c94', fontStyle: 'italic', lineHeight: 1.5 }}>
+            No tasks yet. Ask the agent to create tasks for your projects.
+          </div>
+        ) : (
+          <>
+            {inProgressCount > 0 && (
+              <div style={{ marginBottom: 6, padding: '5px 8px', background: '#eff6ff', borderRadius: 6, fontSize: 11, color: '#1d4ed8', fontWeight: 500 }}>
+                {inProgressCount} in progress
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {recentTasks.map(task => {
+                const style = getTaskStyle(task.status)
+                return (
+                  <div key={task.id} style={{ display: 'flex', gap: 8, padding: '5px 0', alignItems: 'flex-start' }}>
+                    <TaskDot status={task.status} />
+                    <div>
+                      <div style={{ fontSize: 12, color: task.status === 'todo' ? '#a09c94' : '#1c1b19', lineHeight: 1.35 }}>
+                        {task.title}
+                      </div>
+                      {task.note && (
+                        <div style={{ fontSize: 10.5, color: style.color, marginTop: 1 }}>{task.note}</div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              {tasks.length > 6 && (
+                <div style={{ fontSize: 11, color: '#a09c94', paddingLeft: 23, marginTop: 2 }}>
+                  +{tasks.length - 6} more
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
       <div style={{ height: 1, background: '#edebe7', margin: '0 14px' }} />
@@ -135,13 +155,14 @@ export default function LeftSidebar({ tasks, logs }: LeftSidebarProps) {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {[
-            { label: 'Tasks done', value: String(doneCount), color: '#1c1b19' },
-            { label: 'Tasks pending', value: String(pendingCount), color: '#1c1b19' },
-            { label: 'Actions logged', value: String(logs.length), color: '#1c1b19' },
+            { label: 'Tasks done', value: String(doneCount) },
+            { label: 'Tasks pending', value: String(pendingCount) },
+            { label: 'Actions logged', value: String(logs.length) },
+            { label: 'Memories stored', value: String(memories.length) },
           ].map(item => (
             <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: 11.5, color: '#7a7670' }}>{item.label}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: item.color }}>{item.value}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: '#1c1b19' }}>{item.value}</span>
             </div>
           ))}
         </div>

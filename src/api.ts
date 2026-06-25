@@ -68,6 +68,23 @@ export interface Playbook {
   created_at: string;
 }
 
+export interface Project {
+  id: string;
+  name: string;
+  description: string | null;
+  status: string;
+  deadline: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+}
+
 export interface AppState {
   tasks: Task[];
   approvals: Approval[];
@@ -192,6 +209,51 @@ export async function getReports(): Promise<Report[]> {
 export async function getPlaybooks(): Promise<Playbook[]> {
   const res = await fetch(`${API_BASE}/api/playbooks`);
   return res.json() as Promise<Playbook[]>;
+}
+
+export async function getMessages(): Promise<ChatMessage[]> {
+  const res = await fetch(`${API_BASE}/api/messages`);
+  return res.json() as Promise<ChatMessage[]>;
+}
+
+export async function clearMessages(): Promise<void> {
+  await fetch(`${API_BASE}/api/messages`, { method: 'DELETE' });
+}
+
+export async function resetAll(): Promise<void> {
+  await fetch(`${API_BASE}/api/reset`, { method: 'POST' });
+}
+
+export async function getProjects(): Promise<Project[]> {
+  const res = await fetch(`${API_BASE}/api/projects`);
+  return res.json() as Promise<Project[]>;
+}
+
+export async function createProject(data: { name: string; description?: string; status?: string; deadline?: string }): Promise<Project> {
+  const res = await fetch(`${API_BASE}/api/projects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json() as Promise<Project>;
+}
+
+export async function updateProject(id: string, data: Partial<Project>): Promise<Project> {
+  const res = await fetch(`${API_BASE}/api/projects/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return res.json() as Promise<Project>;
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await fetch(`${API_BASE}/api/projects/${id}`, { method: 'DELETE' });
+}
+
+export async function getLeadLogs(leadId: string): Promise<ActionLog[]> {
+  const res = await fetch(`${API_BASE}/api/leads/${leadId}/logs`);
+  return res.json() as Promise<ActionLog[]>;
 }
 
 // WebSocket connection for real-time updates

@@ -8,3 +8,5 @@ input, button, textarea, select { font-family: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes dotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }

@@ -1,10 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { sendMessage, getState } from '../api'
-import type { AppState, ToolEvent } from '../api'
+import { sendMessage, getState, getMessages, clearMessages } from '../api'
+import type { AppState, ToolEvent, ChatMessage } from '../api'
 
-// Extract the visible response from agent output.
-// The LLM sometimes returns raw JSON like {"thought":"...","response":"..."}.
-// Strip that and return just the response text.
 function extractResponse(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed.startsWith('{')) return trimmed
@@ -13,19 +10,17 @@ function extractResponse(raw: string): string {
     if (typeof parsed.response === 'string') return parsed.response
     if (typeof parsed.thought === 'string' && !parsed.response) return parsed.thought
   } catch {
-    // partial JSON mid-stream — return as-is
+    // partial JSON mid-stream
   }
   return trimmed
 }
 
-// Render basic markdown: **bold**, bullet lists, line breaks
 function renderMarkdown(text: string): React.ReactNode {
   const lines = text.split('\n')
   return lines.map((line, i) => {
     const isBullet = /^[-*•]\s+/.test(line)
     const content = isBullet ? line.replace(/^[-*•]\s+/, '') : line
 
-    // Bold: **text**
     const parts = content.split(/(\*\*[^*]+\*\*)/)
     const rendered = parts.map((part, j) => {
       if (part.startsWith('**') && part.endsWith('**')) {
@@ -42,7 +37,6 @@ function renderMarkdown(text: string): React.ReactNode {
         </div>
       )
     }
-
     return (
       <div key={i} style={{ marginTop: i > 0 && line ? 6 : i > 0 ? 4 : 0 }}>
         {rendered}
@@ -68,7 +62,6 @@ const SpinnerIcon = () => (
   }} />
 )
 
-
 interface ToolCall {
   name: string
   params: Record<string, unknown>
@@ -89,15 +82,41 @@ interface ChatPanelProps {
   onStateChange: (state: AppState) => void
 }
 
+function historyToMessages(history: ChatMessage[]): Message[] {
+  return history.map((m, i) => ({
+    id: i,
+    type: m.role === 'user' ? 'user' : 'agent',
+    text: m.content,
+    streaming: false,
+    toolCalls: [],
+  }))
+}
+
 export default function ChatPanel({ onStateChange }: ChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    getMessages()
+      .then(history => {
+        setMessages(historyToMessages(history))
+        setHistoryLoaded(true)
+      })
+      .catch(() => setHistoryLoaded(true))
+  }, [])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: historyLoaded ? 'smooth' : 'instant' })
+  }, [messages, historyLoaded])
+
+  const handleClear = async () => {
+    if (!confirm('Clear all chat history?')) return
+    await clearMessages()
+    setMessages([])
+  }
 
   const send = async () => {
     const text = input.trim()
@@ -131,13 +150,10 @@ export default function ChatPanel({ onStateChange }: ChatPanelProps) {
         }
       )
 
-      // Refresh state after agent finishes
       try {
         const newState = await getState()
         onStateChange(newState)
-      } catch {
-        // ignore state refresh error
-      }
+      } catch { /* ignore */ }
     } catch (err) {
       setMessages(prev => prev.map(m =>
         m.id === agentMsgId
@@ -162,13 +178,26 @@ export default function ChatPanel({ onStateChange }: ChatPanelProps) {
 
   return (
     <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, background: '#f3f2ef' }}>
+      {/* Header bar */}
+      <div style={{ padding: '10px 20px', background: '#fff', borderBottom: '1px solid #e5e2db', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1c1b19' }}>Chat</div>
+        {messages.length > 0 && (
+          <button
+            onClick={() => void handleClear()}
+            style={{ background: 'none', border: 'none', fontSize: 11.5, color: '#a09c94', cursor: 'pointer', padding: '3px 6px', borderRadius: 5 }}
+          >
+            Clear history
+          </button>
+        )}
+      </div>
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18, minHeight: 0 }}>
-        {messages.length === 0 && (
+        {messages.length === 0 && historyLoaded && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#a09c94' }}>
             <div style={{ fontSize: 22, marginBottom: 10 }}>👋</div>
             <div style={{ fontSize: 14, fontWeight: 500, color: '#1c1b19', marginBottom: 6 }}>Ask your agent anything</div>
             <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>
-              Try: "Find 10 local restaurants that need catering services" or "Draft a weekly report"
+              Try: "Find 10 local restaurants that need catering services" or "Create a project for Q3 outreach"
             </div>
           </div>
         )}
@@ -191,7 +220,6 @@ export default function ChatPanel({ onStateChange }: ChatPanelProps) {
                   Employee Agent
                 </div>
 
-                {/* Tool calls */}
                 {(msg.toolCalls?.length ?? 0) > 0 && (
                   <div style={{
                     background: '#fff', border: '1px solid #e5e2db',
@@ -219,7 +247,6 @@ export default function ChatPanel({ onStateChange }: ChatPanelProps) {
                   </div>
                 )}
 
-                {/* Response text */}
                 {(msg.text || msg.streaming) && (
                   <div style={{
                     background: '#fff', border: '1px solid #e5e2db',
@@ -227,13 +254,23 @@ export default function ChatPanel({ onStateChange }: ChatPanelProps) {
                     fontSize: 13.5, lineHeight: 1.6, color: '#1c1b19',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                   }}>
-                    {msg.streaming && !msg.text
-                      ? <span style={{ color: '#a09c94' }}>...</span>
-                      : renderMarkdown(extractResponse(msg.text))}
+                    {msg.streaming && !msg.text ? (
+                      <span style={{ color: '#a09c94' }}>
+                        <span style={{ animation: 'dotPulse 1.4s ease infinite', display: 'inline-block' }}>●</span>
+                        <span style={{ animation: 'dotPulse 1.4s ease infinite 0.2s', display: 'inline-block', margin: '0 3px' }}>●</span>
+                        <span style={{ animation: 'dotPulse 1.4s ease infinite 0.4s', display: 'inline-block' }}>●</span>
+                      </span>
+                    ) : (
+                      <>
+                        {renderMarkdown(extractResponse(msg.text))}
+                        {msg.streaming && (
+                          <span style={{ display: 'inline-block', width: 2, height: '1em', background: '#1c1b19', marginLeft: 2, animation: 'blink 1s step-end infinite', verticalAlign: 'text-bottom' }} />
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
 
-                {/* Error state */}
                 {msg.error && (
                   <div style={{
                     background: '#fef2f2', border: '1px solid #fecaca',
@@ -249,7 +286,6 @@ export default function ChatPanel({ onStateChange }: ChatPanelProps) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Chat input */}
       <div style={{ padding: '12px 20px 14px', background: '#fff', borderTop: '1px solid #e5e2db', flexShrink: 0 }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 8,

@@ -8,7 +8,7 @@ import LoginScreen from './components/LoginScreen'
 import { getState, connectWebSocket, approveAction, rejectAction } from './api'
 import type { AppState } from './api'
 
-export type TabId = 'leads' | 'memory' | 'reports' | 'improvements' | 'playbooks'
+export type TabId = 'leads' | 'memory' | 'reports' | 'improvements' | 'playbooks' | 'projects'
 
 const emptyState: AppState = {
   tasks: [],
@@ -22,7 +22,7 @@ const emptyState: AppState = {
 
 function Workspace() {
   const [state, setState] = useState<AppState>(emptyState)
-  const [activeTab, setActiveTab] = useState<TabId>('leads')
+  const [activeTab, setActiveTab] = useState<TabId>('projects')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -64,7 +64,7 @@ function Workspace() {
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <Header pendingCount={pendingApprovals.length} />
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-        <LeftSidebar tasks={state.tasks} logs={state.logs} />
+        <LeftSidebar tasks={state.tasks} logs={state.logs} memories={state.memories} />
         <ChatPanel onStateChange={(newState) => setState(newState)} />
         <RightPanel
           approvals={pendingApprovals}

@@ -5,6 +5,7 @@ import MemoryTab from './tabs/MemoryTab'
 import ReportsTab from './tabs/ReportsTab'
 import ImprovementsTab from './tabs/ImprovementsTab'
 import PlaybooksTab from './tabs/PlaybooksTab'
+import ProjectsTab from './tabs/ProjectsTab'
 
 interface BottomTabsProps {
   activeTab: TabId
@@ -14,6 +15,7 @@ interface BottomTabsProps {
 
 export default function BottomTabs({ activeTab, onTabChange, state }: BottomTabsProps) {
   const tabs: { id: TabId; label: string; badge?: number }[] = [
+    { id: 'projects', label: 'Projects' },
     { id: 'leads', label: 'Leads', badge: state.leads.length || undefined },
     { id: 'memory', label: 'Memory' },
     { id: 'reports', label: 'Reports' },
@@ -58,6 +60,7 @@ export default function BottomTabs({ activeTab, onTabChange, state }: BottomTabs
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '14px 20px' }}>
+        {activeTab === 'projects' && <ProjectsTab />}
         {activeTab === 'leads' && <LeadsTab leads={state.leads} />}
         {activeTab === 'memory' && <MemoryTab memories={state.memories} />}
         {activeTab === 'reports' && <ReportsTab reports={state.reports} />}
