@@ -25,3 +25,6 @@ dist-ssr
 
 # Nested repo
 employee-agent/
+*.db
+*.db-shm
+*.db-wal
