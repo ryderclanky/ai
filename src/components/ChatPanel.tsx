@@ -2,17 +2,60 @@ import { useState, useRef, useEffect } from 'react'
 import { sendMessage, getState, getMessages, clearMessages } from '../api'
 import type { AppState, ToolEvent, ChatMessage } from '../api'
 
-function extractResponse(raw: string): string {
-  const trimmed = raw.trim()
-  if (!trimmed.startsWith('{')) return trimmed
-  try {
-    const parsed = JSON.parse(trimmed) as Record<string, unknown>
-    if (typeof parsed.response === 'string') return parsed.response
-    if (typeof parsed.thought === 'string' && !parsed.response) return parsed.thought
-  } catch {
-    // partial JSON mid-stream
+// Repair JSON by escaping raw control characters inside string values.
+function repairJSON(text: string): string {
+  let result = ''
+  let inString = false
+  let escaped = false
+  for (const ch of text) {
+    if (escaped) { result += ch; escaped = false; continue }
+    if (ch === '\\') { result += ch; escaped = true; continue }
+    if (ch === '"') { inString = !inString; result += ch; continue }
+    if (inString && ch === '\n') { result += '\\n'; continue }
+    if (inString && ch === '\r') { result += '\\r'; continue }
+    if (inString && ch === '\t') { result += '\\t'; continue }
+    result += ch
   }
-  return trimmed
+  return result
+}
+
+function extractResponse(raw: string): string {
+  let trimmed = raw.trim()
+  // Strip a surrounding markdown code fence
+  const fence = trimmed.match(/^```(?:json)?\s*([\s\S]+?)\s*```$/)
+  if (fence) trimmed = fence[1].trim()
+  if (!trimmed.startsWith('{')) return raw.trim()
+
+  // Try strict then repaired parse
+  for (const candidate of [trimmed, repairJSON(trimmed)]) {
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, unknown>
+      if (typeof parsed.response === 'string') return parsed.response
+      if (typeof parsed.thought === 'string' && !parsed.response) return parsed.thought
+    } catch {
+      // try next
+    }
+  }
+
+  // Closed "response":"..." field via regex (malformed but complete)
+  const closed = trimmed.match(/"response"\s*:\s*"((?:[^"\\]|\\.)*)"/)
+  if (closed) {
+    try { return JSON.parse(`"${closed[1]}"`) as string } catch { return closed[1] }
+  }
+
+  // Mid-stream partial: show whatever follows "response":" so the user
+  // never sees the JSON scaffolding while tokens are still arriving.
+  const partial = trimmed.match(/"response"\s*:\s*"([\s\S]*)$/)
+  if (partial) {
+    return partial[1]
+      .replace(/"\s*[,}]?\s*$/, '')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\"/g, '"')
+  }
+
+  // Looks like JSON but no response field yet — suppress the scaffolding
+  return ''
 }
 
 function renderMarkdown(text: string): React.ReactNode {

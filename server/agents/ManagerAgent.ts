@@ -124,8 +124,13 @@ export class ManagerAgent {
         }
       }
 
-      // Not JSON or unrecognized — treat as final plain text response
-      const finalText = responseText;
+      // Not parseable as JSON, but the model may still have emitted a
+      // `{"thought":..., "response":...}` shape that failed strict parsing
+      // (DeepSeek often uses literal newlines inside strings). Pull the
+      // response/thought field out via regex so we never leak raw JSON.
+      const extracted = this.extractField(responseText, 'response')
+        ?? this.extractField(responseText, 'thought');
+      const finalText = extracted ?? responseText;
       for (const char of finalText) {
         callbacks.onToken(char);
       }
@@ -173,20 +178,53 @@ Rules:
 
   private tryParseJSON(text: string): unknown {
     const trimmed = text.trim();
-    // Try direct parse
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      // Try to extract JSON from markdown code blocks
-      const match = trimmed.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-      if (match) {
-        try {
-          return JSON.parse(match[1]);
-        } catch {
-          // ignore
-        }
+    // Strip a surrounding markdown code fence if present
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+    const unfenced = fenceMatch ? fenceMatch[1].trim() : trimmed;
+
+    // Try strict parse, then a repaired parse that escapes raw control
+    // characters living inside string values (the most common DeepSeek
+    // malformation), on both the raw and unfenced candidates.
+    const candidates = [trimmed, unfenced, this.repairJSON(unfenced)];
+    for (const candidate of candidates) {
+      try {
+        return JSON.parse(candidate);
+      } catch {
+        // try next candidate
       }
-      return null;
+    }
+    return null;
+  }
+
+  // Escape literal newlines/tabs that appear *inside* JSON string values so
+  // that an otherwise-valid object parses. Walks the text tracking whether we
+  // are inside a string and whether the previous char was an escape.
+  private repairJSON(text: string): string {
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    for (const ch of text) {
+      if (escaped) { result += ch; escaped = false; continue; }
+      if (ch === '\\') { result += ch; escaped = true; continue; }
+      if (ch === '"') { inString = !inString; result += ch; continue; }
+      if (inString && ch === '\n') { result += '\\n'; continue; }
+      if (inString && ch === '\r') { result += '\\r'; continue; }
+      if (inString && ch === '\t') { result += '\\t'; continue; }
+      result += ch;
+    }
+    return result;
+  }
+
+  // Extract a single string field's value from text that looks like JSON but
+  // may not parse. Returns the unescaped value, or null if not found.
+  private extractField(text: string, field: string): string | null {
+    const re = new RegExp(`"${field}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`);
+    const m = text.match(re);
+    if (!m) return null;
+    try {
+      return JSON.parse(`"${m[1]}"`);
+    } catch {
+      return m[1];
     }
   }
 }

@@ -64,23 +64,14 @@ app.post('/api/chat', async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
-  const db = getDb();
-  db.prepare('INSERT INTO messages (id, role, content) VALUES (?, ?, ?)').run(uuidv4(), 'user', message);
-
-  let accumulatedResponse = '';
-
   const sendEvent = (data: { type: string; data: unknown }) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
-    if (data.type === 'token') {
-      accumulatedResponse += data.data as string;
-    }
   };
 
   try {
+    // handleMessage persists both the user message and the assistant
+    // response to the messages table — no extra save needed here.
     await orchestrator.handleMessage(message, sendEvent);
-    if (accumulatedResponse.trim()) {
-      db.prepare('INSERT INTO messages (id, role, content) VALUES (?, ?, ?)').run(uuidv4(), 'assistant', accumulatedResponse);
-    }
     sendEvent({ type: 'done', data: null });
   } catch (err) {
     sendEvent({ type: 'error', data: String(err) });
